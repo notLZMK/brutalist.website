@@ -10,18 +10,23 @@ COPY . .
 
 RUN npm run build
 
-FROM node:16-alpine
+FROM nginx:alpine
 
-WORKDIR /app
+COPY --from=builder /app/out /usr/share/nginx/html
 
-RUN addgroup --system --gid 1001 appgroup && adduser --system --uid 1001 appuser
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-COPY --from=builder --chown=appuser:appgroup /app/out out/
+RUN chown -R nginx:nginx /usr/share/nginx/html && \
+    chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /var/log/nginx && \
+    touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/run/nginx.pid
 
-RUN npm install -g serve
+USER nginx
 
-USER appuser
+EXPOSE 8080
 
-EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
-CMD ["serve", "-s", "-l", "3000", "out"]
+CMD ["nginx", "-g", "daemon off;"]
